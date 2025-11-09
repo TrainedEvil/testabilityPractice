@@ -10,11 +10,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class FilterInvoiceTest {
 
-    private Database db;
-    private QueryInvoicesDAO dao;
-    private FilterInvoice filterInvoice;
+    private Database db; // database instance
+    private QueryInvoicesDAO dao; // DAO to interact with DB
+    private FilterInvoice filterInvoice; // class under test
 
-    @BeforeEach
+    @BeforeEach // setup fresh DB and DAO before each test
     void setUp() {
         db = new Database();
         dao = new QueryInvoicesDAO(db);
@@ -22,7 +22,7 @@ class FilterInvoiceTest {
         filterInvoice = new FilterInvoice();
     }
 
-    @AfterEach
+    @AfterEach // teardown DB after each test
     void tearDown() {
         db.close();
     }
