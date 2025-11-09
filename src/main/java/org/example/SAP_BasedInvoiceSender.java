@@ -1,24 +1,32 @@
 package org.example;
 
+import java.util.ArrayList;
 import java.util.List;
 
-// Class responsible for sending low-valued invoices to the SAP system
 public class SAP_BasedInvoiceSender {
 
-    private final FilterInvoice filter;  // Dependency for filtering invoices
-    private final SAP sap;  // Dependency for sending invoices to the SAP system
+    private final FilterInvoice filter;
+    private final SAP sap;
 
-    // Constructor that uses dependency injection to initialize the filter and sap objects
     public SAP_BasedInvoiceSender(FilterInvoice filter, SAP sap) {
         this.filter = filter;
         this.sap = sap;
     }
 
-    // Method to send all low-valued invoices to the SAP system
-    public void sendLowValuedInvoices() {
+    // Now returns a list of invoices that failed to send
+    public List<Invoice> sendLowValuedInvoices() {
         List<Invoice> lowValuedInvoices = filter.lowValueInvoices();
-        for (Invoice invoice : lowValuedInvoices) {  // Iterates through each invoice in the list
-            sap.send(invoice);  // Sends the current invoice to the SAP system
+        List<Invoice> failedInvoices = new ArrayList<>();
+
+        for (Invoice invoice : lowValuedInvoices) {
+            try {
+                sap.send(invoice);
+            } catch (Exception e) {
+                failedInvoices.add(invoice);
+                // Log or wrap if needed, but continue sending others
+            }
         }
+
+        return failedInvoices;
     }
 }

@@ -1,72 +1,77 @@
 package org.example;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class SAP_BasedInvoiceSenderTest {
-
-    // Stub FilterInvoice that returns a preset list
-    static class StubFilterInvoice extends FilterInvoice {
-        private final List<Invoice> toReturn;
-
-        StubFilterInvoice(List<Invoice> toReturn) {
-            // super() will run and build real internals, but we override usage below
-            this.toReturn = toReturn;
-        }
-
-        @Override
-        public List<Invoice> lowValueInvoices() {
-            return toReturn;
-        }
-    }
-
-    // Spy SAP that records sends
-    static class SpySAP implements SAP {
-        final List<Invoice> sent = new ArrayList<>();
-        @Override
-        public void send(Invoice invoice) {
-            sent.add(invoice);
-        }
-    }
-
+// Test sending low valued invoices with various scenarios
     @Test
     void testWhenLowInvoicesSent() {
-        // Arrange
-        // Prepare stub data and spy
-        List<Invoice> low = List.of(
+        FilterInvoice filter = mock(FilterInvoice.class);
+        SAP sap = mock(SAP.class);
+    // Arrange - stub low value invoices
+        List<Invoice> invoices = List.of(
                 new Invoice("Alice", 50),
-                new Invoice("Bob", 99)
+                new Invoice("Bob", 80)
         );
-        StubFilterInvoice filterStub = new StubFilterInvoice(low);
-        SpySAP sapSpy = new SpySAP();
-        SAP_BasedInvoiceSender sender = new SAP_BasedInvoiceSender(filterStub, sapSpy);
-
+        when(filter.lowValueInvoices()).thenReturn(invoices);
         // Act
-        // Call method under test
-        sender.sendLowValuedInvoices();
+        SAP_BasedInvoiceSender sender = new SAP_BasedInvoiceSender(filter, sap);
 
-        // Assert - verify sap.send was called for each invoice
-        assertEquals(2, sapSpy.sent.size());
-        assertTrue(sapSpy.sent.containsAll(low));
+        List<Invoice> failed = sender.sendLowValuedInvoices();
+
+        // Verify both invoices were sent successfully
+        verify(sap, times(1)).send(invoices.get(0));
+        verify(sap, times(1)).send(invoices.get(1));
+        assertTrue(failed.isEmpty());
     }
 
+    // Test when there are no low value invoices
     @Test
     void testWhenNoInvoices() {
-        // Arrange
-        // Prepare empty stub and spy
-        StubFilterInvoice filterStub = new StubFilterInvoice(List.of());
-        SpySAP sapSpy = new SpySAP();
-        SAP_BasedInvoiceSender sender = new SAP_BasedInvoiceSender(filterStub, sapSpy);
-
+        FilterInvoice filter = mock(FilterInvoice.class);
+        SAP sap = mock(SAP.class);
+// Arrange - stub no low value invoices
+        when(filter.lowValueInvoices()).thenReturn(List.of());
         // Act
-        // Call method under test
-        sender.sendLowValuedInvoices();
+        SAP_BasedInvoiceSender sender = new SAP_BasedInvoiceSender(filter, sap);
 
-        // Assert - verify no sap.send calls occurred
-        assertTrue(sapSpy.sent.isEmpty());
+        List<Invoice> failed = sender.sendLowValuedInvoices();
+        // Verify no invoices were sent
+        verifyNoInteractions(sap);
+        assertTrue(failed.isEmpty());
+    }
+
+    // Test handling exception when sending an invoice fails
+    @Test
+    void testThrowExceptionWhenBadInvoice() {
+        FilterInvoice filter = mock(FilterInvoice.class);
+        SAP sap = mock(SAP.class);
+
+        Invoice good = new Invoice("Alice", 50);
+        Invoice bad = new Invoice("Bob", 80);
+
+        when(filter.lowValueInvoices()).thenReturn(List.of(good, bad));
+
+        // Simulate SAP failing for "bad"
+        doThrow(new FailToSendSAPInvoiceException("SAP failure", new RuntimeException()))
+                .when(sap).send(bad);
+
+        SAP_BasedInvoiceSender sender = new SAP_BasedInvoiceSender(filter, sap);
+
+        List<Invoice> failed = sender.sendLowValuedInvoices();
+
+        // Verify both were attempted
+        verify(sap).send(good);
+        verify(sap).send(bad);
+
+        // Ensure the bad one is returned as failed
+        assertEquals(1, failed.size());
+        assertEquals(bad, failed.get(0));
     }
 }
